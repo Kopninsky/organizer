@@ -1,0 +1,1 @@
+/Users/alex/Desktop/node test/practice/organizer/input/aaaa.txt

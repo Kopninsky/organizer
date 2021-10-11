@@ -1,40 +1,98 @@
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
 
-const scriptArgs = process.argv.slice(2);
+const scriptArs = process.argv.slice(2)
+const entry = scriptArs[0] || 'input'
+const output = scriptArs[1] || 'output'
+const remove = scriptArs[2] || false
 
-const INPUT_PATH = path.normalize(path.join(__dirname, scriptArgs[0] || 'input'));
-const OUTPUT_PATH = path.normalize(path.join(__dirname, scriptArgs[1] || 'output'));
-const RM_INPUT = scriptArgs[2];
+const files = []
+let childDirs = []
 
-const readDirectory = (input) => {
-  try {
-    const pathCreater = (path) => fs.existsSync(path) ? null : fs.mkdirSync(path);
-    pathCreater(OUTPUT_PATH);
+const main = (
+  readDir,
+  checkDir,
+  copyFiles,
+  removeDir,
+  close
+) => {
+  readDir()
+  checkDir()
+  copyFiles()
+  removeDir()
+}
 
-    fs
-      .readdirSync(input)
-      .forEach(file => {
-        let localBase = path.join(input, file);
-        let state = fs.statSync(localBase);
-        let fileLit = file.charAt(0).toLocaleUpperCase();
-        let newPath = path.join(OUTPUT_PATH, fileLit);
+const readDir = (dir) => {
+  const dirs = fs.readdirSync(dir)
+  childDirs = dirs.slice()
+}
 
-        if (state.isFile()) {
-          pathCreater(newPath);
-          fs.readFileSync(localBase);
-          fs.writeFileSync(path.join(newPath, file), localBase);
+const checkDir = (dir, childDirs) => {
+  childDirs.forEach(childDir => {
+    const directory = path.join(dir, childDir)
 
-          RM_INPUT === 'delete' ? fs.unlinkSync(localBase) : null;
-        } else {
-          readDirectory(localBase);
-        }
-      });
+    if (fs.statSync(directory).isDirectory()) {
+      const items = fs.readdirSync(directory)
+      return checkDir(directory, items)
+    }
+    return files.push({ name: childDir, path: dir })
+  })
+  return files
+}
 
-      RM_INPUT === 'delete' ? fs.rmdirSync(input) : null;
-  } catch (error) {
-    console.log(error);
+const createDir = (dir) => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(path.join(dir))
+    console.log(`Directory: ${dir} create successfully!`)
   }
-};
+}
 
-readDirectory(INPUT_PATH);
+const copyFiles = (files, dir) => {
+  files.forEach(file => {
+    createDir(dir)
+    createDir(path.join(dir, file.name[0]))
+    const entry = path.join(file.path, file.name)
+    const output = path.join(dir, file.name[0], file.name)
+    fs.copyFileSync(entry, output)
+    console.log(`File: ${output} copied and sorted!`)
+  });
+}
+
+const removeDir = (dir) => {
+  let files
+  const rmSelf = true
+  dir = dir + '/';
+
+  try {
+    files = fs.readdirSync(dir)
+  } catch (e) { 
+    console.log(`Directory is not exist!`)
+    return
+  }
+
+  if (files.length > 0) {
+    files.forEach((x) => {
+      if (fs.statSync(dir + x).isDirectory()) {
+        removeDir(dir + x);
+      } else {
+        fs.unlinkSync(dir + x);
+      }
+    });
+  }
+
+  if (rmSelf) {
+    fs.rmdirSync(dir)
+  }
+
+  console.log(`Directory: ${dir} removed!`)
+}
+
+main(() => {
+  readDir(entry)
+}, () => {
+  checkDir(entry, childDirs)
+}, () => {
+  copyFiles(files, output)
+}, () => {
+  if (remove) removeDir(entry)
+})
